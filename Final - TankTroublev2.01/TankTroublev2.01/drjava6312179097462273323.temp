@@ -1,0 +1,443 @@
+import javax.swing.JFrame;
+import java.awt.*;
+import java.awt.Dimension;
+import java.awt.image.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.applet.AudioClip;
+import java.applet.Applet;
+import java.util.Random;
+//runnable interface contains run () method  -> (interface kullaniminda gerekli)
+public class TankTrouble extends Canvas implements Runnable {
+  
+  public static final int WIDTH = 1300; // screen width
+  public static final int HEIGHT = 768; // screen height
+  public final String TITLE = "TankTrouble v2.0";
+  public static final int VEL = 3;
+ 
+  public Tank player1;
+  public Tank player2;
+  public AllBullets b;
+  private final double ROTDEG = 3;
+  private boolean isRunning = false;  //whether or not the program is running 
+  public Thread thread; // For more info about threads: http://docs.oracle.com/javase/tutorial/essential/concurrency/sleep.html
+  private Bomb bombRef1;// //to make a reference to the bomb object when exploding (will be constantly updated to be the next bomb)
+  private Bomb bombRef2;
+  private MachineGun machRef1;//NEW
+  private MachineGun machRef2;//NEW
+  private TrollRocket rocket1;
+  private TrollRocket rocket2;
+  private Laser laserRef1;
+  private Laser laserRef2;
+ 
+  public Menu menu;
+  public Credits credits;
+  public Map map;
+  public Physics physics;
+  public Scoring scoring;
+  private BufferedImage image = new BufferedImage(WIDTH,HEIGHT,BufferedImage.TYPE_INT_RGB);
+ 
+  
+  /**Enumerator to understand whether or not the game has started **/
+  public enum STATE{
+    MENU,
+    GAME,
+    CREDITS
+  };
+  
+  public STATE state = STATE.MENU; // state = MENU 
+  
+  
+  private void initializeGame(){
+    
+    requestFocus(); // for more info: https://answers.yahoo.com/question/index?qid=20100201110043AAdu0ic
+    
+    /*Listeners*/
+    addKeyListener(new KeyboardHandler(this)); 
+    addMouseListener(new MouseHandler(this));
+    addMouseMotionListener(new MouseHandler(this));
+    
+    menu = new Menu();
+    // Menu'ye eklemeler yapilacak! (TO DO)
+    
+    credits = new Credits(0,0,this);
+    
+    map = new Map(0,0,this);
+    // Map'e width and height gonderilecek ! (TO DO)
+    physics = new Physics(this);
+    scoring = new Scoring(this);
+    
+    player1 = new Tank("Tank 1: Cengiz", "blue",2,this);
+    player2 = new Tank("Tank 2: Agalar", "red",5,this);
+       
+    bombRef1 = new Bomb(0,0,this,player1);//will all be updated later
+    bombRef2 = new Bomb(0,0,this,player2);
+    bombRef1.setExplosion(true);
+    bombRef2.setExplosion(true);
+    machRef1 = new MachineGun(0,0,this,player1);
+    machRef2 = new MachineGun(0,0,this,player2);
+    machRef1.isActive = false;
+    machRef2.isActive = false;
+    rocket1 = new TrollRocket (0, 0, this, player1, player2);
+    rocket2 = new TrollRocket (0, 0, this, player2, player1);
+    laserRef1 = new Laser(0,0,this,player1);
+    laserRef2 = new Laser(0,0,this,player2);
+    laserRef1.isReady = true;
+    laserRef2.isReady = true;
+    
+    b = new AllBullets(this);
+    
+  }
+
+  
+  private synchronized void start()
+  {
+    if(isRunning)
+      return;
+    
+    isRunning =  true;
+    thread = new Thread(this);
+    thread.start();
+  }
+  
+  private synchronized void stop()
+  {
+    long lastTime = System.nanoTime();
+    if(!isRunning)
+      return;
+    
+    isRunning = false;
+    try {
+    thread.join();
+    }
+    catch (InterruptedException e){
+      e.printStackTrace();
+    }
+      
+      System.exit(1);
+  }
+  
+  public void run()
+  {
+    initializeGame();
+    long lastTime = System.nanoTime();
+    final double amountPerSecond = 60.0;
+    double n = 1000000000 / amountPerSecond;
+    double interval = 0;
+    int updates = 0;
+    int frames = 0;
+    long timer = System.currentTimeMillis();
+    
+    while(isRunning)
+    {
+      long timeNow = System.nanoTime();
+      interval += (timeNow - lastTime) / n;
+      lastTime=timeNow;
+      if(interval>=1)
+      {
+      //System.out.println("Working");
+      updateGame();
+      updates++;
+      interval--;
+      }
+      renderGame();
+      frames++;
+      
+      if(System.currentTimeMillis() - timer > 1000)
+      {
+        timer+=1000;
+       System.out.println(updates + " ticks, fps " + frames);
+        updates = 0;
+        frames = 0;
+      }
+    }
+    
+  }
+  
+  private void updateGame()
+  {
+    if(state == STATE.GAME)
+    {
+    player1.updateTank();
+    player2.updateTank();
+    b.updateAllBullets();
+   
+     //System.out.println(b.bullets.size());
+   // System.out.println(player1.getRotation() + " rot");
+    }
+    else if(state == STATE.MENU)
+    {
+      ;
+    }
+    else if (state == STATE.CREDITS){
+      ;
+    }
+  }
+  
+  private void renderGame()
+  {
+   
+    BufferStrategy bs = this.getBufferStrategy();
+    if(bs == null)
+    {
+      createBufferStrategy(2);
+      return;
+    }
+    
+    
+    Graphics g = bs.getDrawGraphics();
+    
+    //Graphics g = null;
+    ////////////////////
+     if(state == STATE.GAME)
+    {
+    g.drawImage(image,0,0,getWidth(),getHeight(),this);
+    map.renderMap(g);
+    player1.renderTank(g);
+    player2.renderTank(g);
+    b.renderAllBullets(g);
+    scoring.renderScoring(g);
+     }
+     else if(state == STATE.MENU)
+     {
+       g.drawImage(image,0,0,getWidth(),getHeight(),this);
+       menu.renderMenu(g);
+     }
+     
+     else if (state == STATE.CREDITS){
+        g.drawImage(image,0,0,getWidth(),getHeight(),this);
+        credits.renderCredits(g);
+     }
+     
+    ///////////////////
+    g.dispose();
+    bs.show();
+   
+  }
+  
+  
+  
+  public void keyPressed(KeyEvent event)
+  {
+    if(state == STATE.GAME)
+    {
+    int pressed = event.getKeyCode();
+    
+    if(pressed == KeyEvent.VK_RIGHT)
+    {
+     player1.addRotationDegree(ROTDEG);
+    //  player1.setVelocityX(VEL);
+    }
+    else if (pressed == KeyEvent.VK_LEFT)
+    {
+      player1.addRotationDegree(-ROTDEG);
+     // player1.setVelocityX(-VEL);
+    }
+    else if (pressed == KeyEvent.VK_DOWN)
+    {
+     
+     player1.setVelocity(VEL);
+    }
+    else if (pressed == KeyEvent.VK_UP)
+    {
+     player1.setVelocity(-VEL);
+    }
+    
+     else if (pressed == KeyEvent.VK_M)
+    {
+       if (!bombRef1.getExplosion()&&!bombRef1.getSparked()) {bombRef1.spark();}
+       else if (!laserRef1.isReady) {laserRef1.isReady = true;}
+       else if(player1.hasShoot())
+      {
+        //player1.addShoot (1);
+        Bullet temp;
+        player1.addShoot (1);
+        switch(player1.bulletType)
+        {
+          case 0: temp = new Bullet(player1.getX(),player1.getY(),this,player1);
+          break;
+          case 1: bombRef1 = new Bomb(player1.getX(),player1.getY(),this,player1); temp=bombRef1;
+          break;
+          case 2: machRef1 = new MachineGun(player1.getX(),player1.getY(),this,player1); temp=machRef1;
+          break;
+          case 3: temp = new Mine(player1.getX(),player1.getY(),this,player1);
+          break;
+          case 4: rocket1 = new TrollRocket(player1.getX(),player1.getY(),this,player1, player2); temp=rocket1;
+          break;
+          case 5: laserRef1 = new Laser(player1.getX(),player1.getY(),this,player1); temp=laserRef1;
+          break;
+          default: temp = new Bullet(player1.getX(),player1.getY(),this,player1);
+          break;
+        }
+        b.insertBullet(temp);
+        //AudioClip clip = Applet.newAudioClip(TankTrouble.class.getResource("blop.wav"));
+         //clip.play();
+        //player1.addShoot (-1);
+       player1.setShoot(false);
+      }
+    }
+     
+     
+    else if(pressed == KeyEvent.VK_F)
+    {
+       player2.addRotationDegree(ROTDEG);
+    }
+    else if (pressed == KeyEvent.VK_S)
+    {
+       player2.addRotationDegree(-ROTDEG);
+    }
+    else if (pressed == KeyEvent.VK_D)
+    {
+      player2.setVelocity(VEL);
+    }
+    else if (pressed == KeyEvent.VK_E)
+    {
+      player2.setVelocity(-VEL);
+    }
+     else if (pressed == KeyEvent.VK_Q)
+    {
+      if (!bombRef2.getExplosion()&&!bombRef2.getSparked()) {bombRef2.spark();}
+      else if (!laserRef2.isReady) {laserRef2.isReady = true;}
+      else if(player2.hasShoot())
+      {
+        //player2.addShoot (1);
+        Bullet temp;
+        player2.addShoot (1);
+        switch(player2.bulletType)
+        {
+          case 0: temp = new Bullet(player2.getX(),player2.getY(),this,player2);
+          break;
+          case 1: bombRef2 = new Bomb(player2.getX(),player2.getY(),this,player2); temp=bombRef2;
+          break;
+          case 2: machRef2 = new MachineGun(player2.getX(),player2.getY(),this,player2); temp=machRef2;
+          break;
+          case 3:  temp = new Mine(player2.getX(),player2.getY(),this,player2);
+          break;
+          case 4: rocket2 = new TrollRocket(player2.getX(),player2.getY(),this,player2, player1); temp=rocket2;
+          break;
+          case 5: laserRef2 = new Laser(player2.getX(),player2.getY(),this,player2); temp=laserRef2;
+          break;
+          default: temp = new Bullet(player2.getX(),player2.getY(),this,player2);
+          break;
+        }
+        b.insertBullet(temp);
+      //  AudioClip clip = Applet.newAudioClip(TankTrouble.class.getResource("blop.wav"));
+       //  clip.play();
+        //player2.addShoot (vaw-1);
+       player2.setShoot(false);
+      }
+    }
+     
+   
+    }
+  }
+  
+  public void keyReleased(KeyEvent event)
+  {
+    if(state==STATE.GAME)
+    {
+    int pressed = event.getKeyCode();
+    
+    if(pressed == KeyEvent.VK_RIGHT)
+    {
+      player1.addRotationDegree(0);
+    }
+    else if (pressed == KeyEvent.VK_LEFT)
+    {
+      player1.addRotationDegree(0);
+    }
+    else if (pressed == KeyEvent.VK_DOWN)
+    {
+      player1.setVelocity(0);
+    }
+    
+    else if (pressed == KeyEvent.VK_UP)
+    {
+     player1.setVelocity(0);
+    }
+    
+    else if ((pressed == KeyEvent.VK_M)&&(machRef1.isActive))//NEW RELEASE
+    {
+      b.eraseBullet(machRef1);
+    }
+    
+    
+    else if(pressed == KeyEvent.VK_F)
+    {
+    player2.addRotationDegree(0);
+    }
+    else if (pressed == KeyEvent.VK_S)
+    {
+    player2.addRotationDegree(0);
+    }
+    else if (pressed == KeyEvent.VK_D)
+    {
+     player2.setVelocity(0);
+    }
+    else if (pressed == KeyEvent.VK_E)
+    {
+     player2.setVelocity(0);
+    }
+    else if ((pressed == KeyEvent.VK_Q)&&(machRef2.isActive))//NEW RELEASE
+    {
+      b.eraseBullet(machRef2);
+    }
+    }
+  }
+  
+  public void restart()
+  {
+    Random rand = new Random();
+    player1.setRotation(0);
+    player1.setX(map.originX + rand.nextInt(7)*100 + 40);
+    player1.setY(map.originY + rand.nextInt(7)*100 + 40);
+    player1.setShoot(true);
+    player2.setRotation(0);
+    player2.setX(map.originX + rand.nextInt(7)*100 + 40);
+    player2.setY(map.originY + rand.nextInt(7)*100 + 40);
+    player2.setShoot(true);
+    for(int i=0;i<b.bullets.size();i++)
+    {
+      Bullet temp = b.bullets.get(i);
+      b.eraseBullet(temp);
+    }
+  }
+  
+  public void setGame()
+  {
+    state = STATE.GAME;
+  }
+  
+  public void setCredits(){
+    state = STATE.CREDITS;
+  }
+  
+  public void setMenu()
+  {
+    state = STATE.MENU;
+  }
+  
+  public static void main(String[] args)
+  {
+    TankTrouble game = new TankTrouble();
+        
+    game.setPreferredSize(new Dimension(WIDTH,HEIGHT));
+    
+    game.setMaximumSize(new Dimension(WIDTH,HEIGHT));
+    
+    game.setMinimumSize(new Dimension(WIDTH,HEIGHT)); 
+    
+    JFrame frame = new JFrame(game.TITLE);
+    frame.add(game);
+    frame.pack();
+    frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    frame.setResizable(false);
+    frame.setLocationRelativeTo(null);
+    frame.setVisible(true);
+    
+    game.start();
+  }
+  
+  
+}

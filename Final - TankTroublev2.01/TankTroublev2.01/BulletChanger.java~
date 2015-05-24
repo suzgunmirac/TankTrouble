@@ -1,0 +1,48 @@
+import java.awt.geom.Rectangle2D;
+
+public class BulletChanger 
+{ 
+  public int bulletType;
+  public Rectangle2D rect;
+  public int x,y;
+  public BulletChanger()
+  {
+    x = game.map.originX + rand.nextInt(7)*100 + 40;
+    y = game.map.originY + rand.nextInt(7)*100 + 40;
+  }
+  
+  public void renderTank(Graphics g)
+  {
+    Graphics2D g2 = (Graphics2D) g;
+    
+    g2.rotate(Math.toRadians(rotation),x,y); 
+    AffineTransform t = new AffineTransform();
+    t.translate(x-31/2, y-47/2); 
+    t.scale(1, 1);
+    g2.drawImage(icon, t, null);  
+    g2.rotate(Math.toRadians(360-rotation),x,y);
+  }
+  public Mine(double xCoordinate, double yCoordinate, TankTrouble tanktrouble, Tank tankNew)
+  {
+    super(xCoordinate,yCoordinate,tanktrouble,tankNew);
+    lifeSpan = 20000;
+    setX(xCoordinate-14);
+    setY(yCoordinate-12);
+    isActive = false;//it gets activated after a second
+    setIcon("mine.png");
+  }
+  
+  public void updateBullet()
+  {
+    if (((System.currentTimeMillis()-timer)>(1000))&&!isActive)
+    {
+      isActive = true;//activate  (will be used in physics)
+    }
+  }
+  
+  public Ellipse2D.Double getShape()
+  {
+    Ellipse2D.Double shape = new Ellipse2D.Double(getX(),getY(),30,30);
+    return shape;
+  }
+}
